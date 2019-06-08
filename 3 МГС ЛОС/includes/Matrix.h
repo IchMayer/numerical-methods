@@ -120,24 +120,34 @@ public:
 			//Без
 		case 0:
 		{
-			vector<T> Best = result;
-			f = MultTMatrixVector(f);
-			r = Residual(f, MultTMatrixVector(MultMatrixVector(Best)));
+			vector<T> Buf(N), Buf1(N), d(N), Best = result;
+			r.resize(N);
+			MultTMatrixVector(f, Buf);
+			f = Buf;
+			MultMatrixVector(Best, Buf);
+			MultTMatrixVector(Buf, Buf1);
+			Subtraction(f, Buf1, r);
 			z = r;
 			T rLastScolar = Scolar(r);
 			T CoudA;
 			T min = 0.;
 			while (checkEnd(rLastScolar, CoudA))
 			{
-				vector<T> d = MultTMatrixVector(MultMatrixVector(z));
+				MultMatrixVector(z, Buf);
+				MultTMatrixVector(Buf, d);
 				a = rLastScolar / Scolar(d, z);
-				Best = Sum(Best, MultVectorOnT(z, a));
+				MultVectorOnT(z, a, Buf);
+				Sum(Best, Buf, Buf1);
+				Best = Buf1;
 				rLast = r;
-				r = Residual(r, MultVectorOnT(d, a));
+				MultVectorOnT(d, a, Buf);
+				Subtraction(r, Buf, Buf1);
+				r = Buf1;
 				T lol = Scolar(r);
 				b = lol / rLastScolar;
 				rLastScolar = lol;
-				z = Sum(r, MultVectorOnT(z, b));
+				MultVectorOnT(z, b, Buf);
+				Sum(r, Buf, z);
 				if (min > CoudA || !min)
 				{
 					min = CoudA;
@@ -152,19 +162,20 @@ public:
 			//LLT
 		case 2:
 		{
-			vector<T> d = Residual(f, MultMatrixVector(result)); //r = U^-t * A ^t * L^ -T * L-1(f - Ax)
-			d = Down(L, D, d);// L d1 = d
-			d = Up(L, D, d);	//L^t d1 = d
-			d = MultTMatrixVector(d); // A^t * d = d1
-			r = Down(L, D, d);	// U^t r = d
+			vector<T> Buf(N), Buf1(N), d(N);
+			r.resize(N);
+			MultMatrixVector(result, Buf);
+			Subtraction(f, Buf, d); //r = U^-t * A ^t * L^ -T * L-1(f - Ax)
+			Diagonal(D, d, Buf);// L d1 = d
+			Diagonal(D, Buf, Buf1);	//L^t d1 = d
+			MultTMatrixVector(Buf1, d); // A^t * d = d1
+			Diagonal(D, d, r);	// U^t r = d
 			z = r;
-
+			
 			x.resize(N);
 #pragma region Умножение_x-_=_Ux
 			for (size_t i = 0; i < N; i++)
 			{
-				for (size_t j = ig[i]; j < ig[i + 1]; j++)
-					x[i] += L[j] * result[jg[j]];
 				x[i] += D[i] * result[i];
 			}
 #pragma endregion
@@ -180,22 +191,27 @@ public:
 			while (checkEnd(rLastScolar, CoudA))
 			{
 
-				vector<T> d = Up(L, D, z);
-				d = MultMatrixVector(d);
-				d = Down(L, D, d);
-				d = Up(L, D, d);
-				d = MultTMatrixVector(d);
-				d = Down(L, D, d);
+				Diagonal(D, z, Buf);
+				MultMatrixVector(Buf, Buf1);
+				Diagonal(D, Buf1, Buf);
+				Diagonal(D, Buf, Buf1);
+				MultTMatrixVector(Buf1, Buf);
+				Diagonal(D, Buf, d);
 				T s = Scolar(d, z);
 				if (!s)
 					break;
 				a = rLastScolar / s;
-				x = Sum(x, MultVectorOnT(z, a));
+				MultVectorOnT(z, a, Buf);
+				Sum(x, Buf, Buf1);
+				x = Buf1;
 				rLast = r;
-				r = Residual(r, MultVectorOnT(d, a));
+				MultVectorOnT(d, a, Buf);
+				Subtraction(r, Buf, Buf1);
+				r = Buf1;
 				T rScolar = Scolar(r);
 				b = rScolar / rLastScolar;
-				z = Sum(r, MultVectorOnT(z, b));
+				MultVectorOnT(z, b, Buf);
+				Sum(r, Buf, z);
 				rLastScolar = rScolar;
 				k++;
 				if (min > CoudA || !min)
@@ -204,17 +220,20 @@ public:
 					Best = x;
 				}
 			}
-			result = Up(L, D, Best);
+			Diagonal(D, Best, result);
 			break;
 		}
 		//LU
 		case 3:
 		{
-			vector<T> d = Residual(f, MultMatrixVector(result)); //r = U^-t * A ^t * L^ -T * L-1(f - Ax)
-			d = Down(L, d);// L d1 = d
-			d = Up(L, d);	//L^t d1 = d
-			d = MultTMatrixVector(d); // A^t * d = d1
-			r = Down(U, D, d);	// U^t r = d
+			vector<T> Buf(N), Buf1(N), d(N);
+			r.resize(N);
+			MultMatrixVector(result, Buf);
+			Subtraction(f, Buf, Buf1); //r = U^-t * A ^t * L^ -T * L-1(f - Ax)
+			Down(L, Buf1, Buf);// L d1 = d
+			Up(L, Buf, Buf1);	//L^t d1 = d
+			MultTMatrixVector(Buf1, d); // A^t * d = d1
+			Down(U, D, d, r);	// U^t r = d
 			z = r;
 
 			x.resize(N);
@@ -237,22 +256,26 @@ public:
 			while (checkEnd(rLastScolar, Coud))
 			{
 
-				vector<T> d = Up(U, D, z);
-				d = MultMatrixVector(d);
-				d = Down(L, d);
-				d = Up(L, d);
-				d = MultTMatrixVector(d);
-				d = Down(U, D, d);
+				Up(U, D, z, Buf);
+				MultMatrixVector(Buf, Buf1);
+				Down(L, Buf1, Buf);
+				Up(L, Buf, Buf1);
+				MultTMatrixVector(Buf1, Buf);
+				Down(U, D, Buf, d);
 				T s = Scolar(d, z);
 				if (!s)
 					break;
 				a = rLastScolar / s;
-				x = Sum(x, MultVectorOnT(z, a));
-				r = Residual(r, MultVectorOnT(d, a));
+				MultVectorOnT(z, a, Buf);
+				Sum(x, Buf, x);
+				MultVectorOnT(d, a, Buf);
+				Subtraction(r, Buf, Buf1);
+				r = Buf1;
 				T rScolar = Scolar(r);
 				b = rScolar / rLastScolar;
 				rLastScolar = rScolar;
-				z = Sum(r, MultVectorOnT(z, b));
+				MultVectorOnT(z, b, Buf);
+				Sum(r, Buf, z);
 
 				if (min > Coud || !min)
 				{
@@ -262,7 +285,7 @@ public:
 
 				k++;
 			}
-			result = Up(U, D, Best);
+			Up(U, D, Best, result);
 			break;
 		}
 		default:
@@ -276,9 +299,13 @@ public:
 		{
 		case 0:
 		{
-			r = Residual(f, MultMatrixVector(result));
+			vector<T> d(N), Buf(N), Buf1(N);
+			r.resize(N);
+			p.resize(N);
+			MultMatrixVector(result, Buf);
+			Subtraction(f, Buf, r);
 			z = r;
-			p = MultMatrixVector(z);
+			MultMatrixVector(z, p);
 			k = 0;
 			T ScolarP = Scolar(p);
 			T ScolarR = Scolar(r);
@@ -288,13 +315,19 @@ public:
 				if (!ScolarP)
 					break;
 				a = Scolar(p, r) / ScolarP;
-				result = Sum(result, MultVectorOnT(z, a));
-				r = Residual(r, MultVectorOnT(p, a));
+				MultVectorOnT(z, a, Buf);
+				Sum(result, Buf, Buf1);
+				result = Buf1;
+				MultVectorOnT(p, a, Buf);
+				Subtraction(r, Buf, Buf1);
+				r = Buf1;
 				T gg = Scolar(r);
-				vector<T> d = MultMatrixVector(r);
+				MultMatrixVector(r, d);
 				b = -1.0 * Scolar(p, d) / ScolarP;
-				z = Sum(r, MultVectorOnT(z, b));
-				p = Sum(d, MultVectorOnT(p, b));
+				MultVectorOnT(z, b, Buf);
+				Sum(r, Buf, z);
+				MultVectorOnT(p, b, Buf);
+				Sum(d, Buf, p);
 				ScolarP = Scolar(p);
 				k++;
 			}
@@ -305,10 +338,16 @@ public:
 			//LLT
 		case 2:
 		{
-			r = Down(L, D, Residual(f, MultMatrixVector(result)));
-			z = Up(L, D, r);
-			p = Down(L, D, MultMatrixVector(z));
-
+			vector<T> d(N), Buf(N), Buf1(N);
+			r.resize(N);
+			z.resize(N);
+			p.resize(N);
+			MultMatrixVector(result, Buf);
+			Subtraction(f, Buf, Buf1);
+			Diagonal(D, Buf1, r);
+			Diagonal(D, r, z);
+			MultMatrixVector(z, Buf);
+			Diagonal(D, Buf, p);
 			k = 0;
 			while (checkEnd(r))
 			{
@@ -316,14 +355,21 @@ public:
 				if (!s)
 					break;
 				a = Scolar(p, r) / s;
-				result = Sum(result, MultVectorOnT(z, a));
-				r = Residual(r, MultVectorOnT(p, a));
-				vector<T> d = Up(L, D, r);
-				d = MultMatrixVector(d);
-				d = Down(L, D, d);
+				MultVectorOnT(z, a, Buf);
+				Sum(result, Buf, Buf1);
+				result = Buf1;
+				MultVectorOnT(p, a, Buf);
+				Subtraction(r, Buf, Buf1);
+				r = Buf1;
+				Diagonal(D, r, Buf);
+				MultMatrixVector(Buf, Buf1);
+				Diagonal(D, Buf1, d);
 				b = -1.0 * Scolar(p, d) / s;
-				z = Sum(Up(L, D, r), MultVectorOnT(z, b));
-				p = Sum(d, MultVectorOnT(p, b));
+				MultVectorOnT(z, b, Buf);
+				Diagonal(D, r, Buf1);
+				Sum(Buf1, Buf, z);
+				MultVectorOnT(p, b, Buf);
+				Sum(d, Buf, p);
 				k++;
 			}
 			break;
@@ -331,10 +377,15 @@ public:
 		//LU
 		case 3:
 		{
-			r = Down(L, Residual(f, MultMatrixVector(result)));
-			z = Up(U, D, r);
-			p = Down(L, MultMatrixVector(z));
-
+			vector<T> d(N), Buf(N), Buf1(N);
+			r.resize(N);
+			p.resize(N);
+			MultMatrixVector(result, Buf);
+			Subtraction(f, Buf, Buf1);
+			Down(L, Buf1, r);
+			Up(U, D, r, z);
+			MultMatrixVector(z, Buf);
+			Down(L, Buf, p);
 			k = 0;
 			while (checkEnd(r))
 			{
@@ -342,14 +393,21 @@ public:
 				if (!s)
 					break;
 				a = Scolar(p, r) / s;
-				result = Sum(result, MultVectorOnT(z, a));
-				r = Residual(r, MultVectorOnT(p, a));
-				vector<T> d = Up(U, D, r);
-				d = MultMatrixVector(d);
-				d = Down(L, d);
+				MultVectorOnT(z, a, Buf);
+				Sum(result, Buf, Buf1);
+				result = Buf1;
+				MultVectorOnT(p, a, Buf);
+				Subtraction(r, Buf, Buf1);
+				r = Buf1;
+				Up(U, D, r, Buf);
+				MultMatrixVector(Buf, Buf1);
+				Down(L, Buf1, d);
 				b = -1.0 * Scolar(p, d) / s;
-				z = Sum(Up(U, D, r), MultVectorOnT(z, b));
-				p = Sum(d, MultVectorOnT(p, b));
+				Up(U, D, r, Buf);
+				MultVectorOnT(z, b, Buf1);
+				Sum(Buf, Buf1, z);
+				MultVectorOnT(p, b, Buf);
+				Sum(d, Buf, p);
 				k++;
 			}
 			break;
@@ -410,7 +468,6 @@ private:
 		ReturnR = ScolarR - h;
 		return true;
 	}
-
 	bool checkEnd(vector<T> r)
 	{
 		if (k == Maxiter)
@@ -422,9 +479,8 @@ private:
 	}
 
 	//Прямой ход
-	vector<T> Down(vector<T> Matrix, vector<T> Diagonal, vector<T> R)
+	void Down(vector<T> Matrix, vector<T> Diagonal, vector<T> R, vector<T> &x)
 	{
-		vector<T> x(N);
 		for (size_t i = 0; i < N; i++)
 		{
 			T sum = 0;
@@ -432,11 +488,9 @@ private:
 				sum += Matrix[j] * x[jg[j]];
 			x[i] = (R[i] - sum) / Diagonal[i];
 		}
-		return x;
 	}
-	vector<T> Down(vector<T> Matrix, vector<T> R)
+	void Down(vector<T> Matrix, vector<T> R, vector<T> &x)
 	{
-		vector<T> x(N);
 		for (size_t i = 0; i < N; i++)
 		{
 			T sum = 0;
@@ -444,42 +498,46 @@ private:
 				sum += Matrix[j] * x[jg[j]];
 			x[i] = R[i] - sum;
 		}
-		return x;
 	}
 
 	//Обратный ход
-	vector<T> Up(vector<T> Matrix, vector<T> Diagonal, vector<T> R)
+	void Up(vector<T> Matrix, vector<T> Diagonal, vector<T> R, vector<T> &v)
 	{
+		v = R;
 		for (int i = N - 1; i >= 0; i--)
 		{
-			R[i] /= Diagonal[i];
+			v[i] /= Diagonal[i];
 			for (size_t j = ig[i]; j < ig[i + 1]; j++)
 			{
 				size_t p = jg[j];
-				R[p] -= Matrix[j] * R[i];
+				v[p] -= Matrix[j] * v[i];
 			}
 		}
-		return R;
 	}
-	vector<T> Up(vector<T> Matrix, vector<T> R)
+	void Up(vector<T> Matrix, vector<T> R, vector<T> &v)
 	{
+		v = R;
 		for (int i = N - 1; i >= 0; i--)
 		{
 			for (size_t j = ig[i]; j < ig[i + 1]; j++)
 			{
 				size_t p = jg[j];
-				R[p] -= Matrix[j] * R[i];
+				v[p] -= Matrix[j] * v[i];
 			}
 		}
-		return R;
+	}
+
+	void Diagonal(vector<T> Diagonalm, vector<T> R, vector<T> &v)
+	{
+		for (size_t i = 0; i < R.size(); i++)
+			v[i] = R[i] / Diagonalm[i];
 	}
 
 	//Умноженик числа на вектор
-	vector<T> MultVectorOnT(vector<T> a, T b)
+	inline void MultVectorOnT(vector<T> a, T b, vector<T> &c)
 	{
 		for (size_t i = 0; i < a.size(); i++)
-			a[i] *= b;
-		return a;
+			c[i] = a[i] * b;
 	}
 
 	//Mult matrix and vector f
@@ -513,25 +571,46 @@ private:
 		return v;
 	}
 
-	//Residual a - b
-	vector<T> Residual(vector<T> a, vector<T> b)
+	void MultMatrixVector(vector<T> f, vector<T> &v)
 	{
-		vector<T> v;
-		v.resize(a.size());
+		v.clear();
+		v.resize(N);
+		for (size_t i = 0; i < N; i++)
+		{
+			for (size_t j = ig[i]; j < ig[i + 1]; j++)
+			{
+				v[i] += ggl[j] * f[jg[j]];
+				v[jg[j]] += ggu[j] * f[i];
+			}
+			v[i] += di[i] * f[i];
+		}
+	}
+	void MultTMatrixVector(vector<T> f, vector<T> &v)
+	{
+		v.clear();
+		v.resize(N);
+		for (size_t i = 0; i < N; i++)
+		{
+			for (size_t j = ig[i]; j < ig[i + 1]; j++)
+			{
+				v[i] += ggu[j] * f[jg[j]];
+				v[jg[j]] += ggl[j] * f[i];
+			}
+			v[i] += di[i] * f[i];
+		}
+	}
+
+	//Residual a - b
+	inline void Subtraction(vector<T> a, vector<T> b, vector<T> &v)
+	{
 		for (size_t i = 0; i < a.size(); i++)
 			v[i] = a[i] - b[i];
-		return v;
 	}
 	//Sum a + b
-	vector<T> Sum(vector<T> a, vector<T> b)
+	inline void Sum(vector<T> a, vector<T> b, vector<T> &v)
 	{
-		vector<T> v;
-		v.resize(a.size());
 		for (size_t i = 0; i < a.size(); i++)
-		{
 			v[i] = a[i] + b[i];
-		}
-		return v;
 	}
 
 	//Норма вектора а
@@ -608,10 +687,8 @@ private:
 	///<param name = "h"> if this param true, then Holisskigo, else diagonal Holisskigo </param>
 	void factorizationLLT()
 	{
-		L.resize(ggl.size());
 		D.resize(N);
 		for (size_t i = 0; i < N; i++)
 			D[i] = sqrt(di[i]);
 	}
 };
-
